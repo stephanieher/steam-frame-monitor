@@ -1,0 +1,93 @@
+name: Check Elgiganten for Steam Frame
+
+on:
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: steam-frame-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Test monitoring and alert logic
+        run: python -m unittest discover -s tests -v
+
+      - name: Check Elgiganten product sitemap
+        id: monitor
+        continue-on-error: true
+        run: python monitor.py
+
+      - name: Alert by GitHub issue
+        if: always() && (steps.monitor.outcome == 'success' || steps.monitor.outcome == 'failure')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_ASSIGNEE: stephanieher
+        run: python notify.py
+
+      - name: Record result in run summary
+        if: always() && (steps.monitor.outcome == 'success' || steps.monitor.outcome == 'failure')
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          status = json.loads(Path('docs/status.json').read_text())
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('## Elgiganten Sweden check\n\n```json\n' + json.dumps(status, indent=2) + '\n```\n')
+          PY
+
+      - name: Save run evidence
+        if: always() && (steps.monitor.outcome == 'success' || steps.monitor.outcome == 'failure')
+        uses: actions/upload-artifact@v4
+        with:
+          name: elgiganten-check-${{ github.run_id }}-${{ github.run_attempt }}
+          path: docs/status.json
+          retention-days: 7
+
+      - name: Save meaningful status changes
+        if: always() && (steps.monitor.outcome == 'success' || steps.monitor.outcome == 'failure')
+        run: |
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          path = Path('docs/status.json')
+          old = json.loads(subprocess.check_output(['git', 'show', 'HEAD:docs/status.json']))
+          new = json.loads(path.read_text())
+          keys = ('found', 'complete', 'matches', 'error', 'partial_errors', 'source')
+          if (old.get('checked_at') or '')[:7] == new.get('checked_at', '')[:7] and all(old.get(k) == new.get(k) for k in keys):
+              subprocess.run(['git', 'restore', str(path)], check=True)
+          PY
+          if ! git diff --quiet -- docs/status.json; then
+            git config user.name 'steam-frame-monitor'
+            git config user.email 'actions@users.noreply.github.com'
+            git add docs/status.json
+            git commit -m 'Update Steam Frame monitor status'
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi
+
+      - name: Fail incomplete checks
+        if: always() && steps.monitor.outcome == 'failure'
+        run: |
+          echo 'Elgiganten check was incomplete. See the run summary and artifact.'
+          exit 1
