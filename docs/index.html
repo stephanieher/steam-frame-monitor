@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Steam Frame Watch</title>
+  <style>
+    :root { color-scheme: dark; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; background:#0b0f14; color:#f5f7fa; }
+    main { width:min(620px,calc(100% - 32px)); padding:32px; box-sizing:border-box; border:1px solid #263241; border-radius:24px; background:#111821; }
+    h1 { margin:0 0 12px; font-size:clamp(30px,8vw,54px); letter-spacing:-.04em; }
+    .status { font-size:22px; margin:22px 0 8px; font-weight:700; }
+    .muted { color:#9aabba; line-height:1.55; }
+    a { color:#9ed0ff; }
+    button { margin-top:20px; border:0; border-radius:14px; padding:14px 18px; font:inherit; font-weight:700; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Steam Frame Watch</h1>
+    <p class="muted">Watching Elgiganten Sweden.</p>
+    <div id="status" class="status">Checking latest result…</div>
+    <div id="details" class="muted"></div>
+    <button onclick="location.reload()">Refresh</button>
+  </main>
+  <script>
+    fetch('./status.json?ts=' + Date.now())
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById('status').textContent = d.found
+          ? '🚨 Steam Frame detected!'
+          : !d.checked_at ? 'Not checked yet'
+          : d.complete ? '✅ Not listed in the product sitemap'
+          : '⚠️ Check incomplete — availability unknown';
+        const details = document.getElementById('details');
+        details.textContent = 'Last saved result: ' + (d.checked_at ? new Date(d.checked_at).toLocaleString() : 'not run') + '. See GitHub Actions for every check.';
+        if (d.error) {
+          const error = document.createElement('p');
+          error.textContent = d.error;
+          details.appendChild(error);
+        }
+        for (const url of d.matches || []) {
+          const parsed = new URL(url);
+          if (parsed.protocol !== 'https:' || !['www.elgiganten.se', 'elgiganten.se'].includes(parsed.hostname)) continue;
+          const row = document.createElement('p');
+          const link = document.createElement('a');
+          link.href = url;
+          link.textContent = url;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          row.appendChild(link);
+          details.appendChild(row);
+        }
+      })
+      .catch(() => {
+        document.getElementById('status').textContent = 'Status unavailable';
+      });
+  </script>
+</body>
+</html>
