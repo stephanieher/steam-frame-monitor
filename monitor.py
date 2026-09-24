@@ -45,7 +45,7 @@ def get(url):
                     continue
                 response.raise_for_status()
                 return response
-            except requests.RequestException:
+            except Exception:
                 if attempt == 3:
                     raise
                 time.sleep(2 ** (attempt + 1))
