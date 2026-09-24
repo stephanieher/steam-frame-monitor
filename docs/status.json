@@ -1,14 +1,14 @@
 {
   "found": false,
   "complete": false,
-  "checked_at": "2026-09-24T11:00:50.446135+00:00",
+  "checked_at": "2026-09-24T11:03:29.503267+00:00",
   "source": "https://www.elgiganten.se/sitemaps/OCSEELG.pdp.index.sitemap.xml",
   "matches": [],
   "sitemaps_checked": 0,
   "sitemaps_attempted": 1,
   "products_checked": 0,
   "partial_errors": [
-    "https://www.elgiganten.se/sitemaps/OCSEELG.pdp.index.sitemap.xml: RetryError: HTTPSConnectionPool(host='www.elgiganten.se', port=443): Max retries exceeded with url: /sitemaps/OCSEELG.pdp.index.sitemap.xml (Caused by ResponseError('too many 429 error responses'))"
+    "https://www.elgiganten.se/sitemaps/OCSEELG.pdp.index.sitemap.xml: AttributeError: module 'curl_cffi.requests' has no attribute 'RequestException'"
   ],
   "error": "Incomplete check: 1 sitemap error(s)"
 }
