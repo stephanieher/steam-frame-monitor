@@ -5,18 +5,16 @@ import gzip
 import json
 import re
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 from xml.etree import ElementTree as ET
 
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+from curl_cffi import requests
 
 SITEMAP_INDEX = "https://www.elgiganten.se/sitemaps/OCSEELG.pdp.index.sitemap.xml"
 STATUS_FILE = Path("docs/status.json")
-USER_AGENT = "SteamFrameAvailabilityMonitor/1.1 (+https://github.com/stephanieher/steam-frame-monitor)"
 
 
 def swedish_url(url):
@@ -34,17 +32,23 @@ def is_steam_frame_url(url):
 def get(url):
     if not swedish_url(url):
         raise ValueError(f"Unexpected sitemap host: {url}")
-    # Each worker gets its own session; never share mutable sessions across threads.
-    retries = Retry(total=3, backoff_factor=2, status_forcelist=[429, 500, 502, 503, 504],
-                    allowed_methods=["GET"], respect_retry_after_header=False)
-    with requests.Session() as session:
-        session.mount("https://", HTTPAdapter(max_retries=retries))
-        response = session.get(url, headers={"User-Agent": USER_AGENT, "Accept": "application/xml,text/xml"},
-                               timeout=(10, 35))
-        response.raise_for_status()
-        if not swedish_url(response.url):
-            raise ValueError("Sitemap redirected outside Elgiganten Sweden")
-        return response
+    # Use a browser-compatible TLS/HTTP stack for the public Vercel-hosted sitemap.
+    # Each worker owns its session. Four attempts have bounded exponential backoff.
+    with requests.Session(impersonate="chrome") as session:
+        for attempt in range(4):
+            try:
+                response = session.get(url, timeout=35)
+                if not swedish_url(response.url):
+                    raise ValueError("Sitemap redirected outside Elgiganten Sweden")
+                if response.status_code in {429, 500, 502, 503, 504} and attempt < 3:
+                    time.sleep(2 ** (attempt + 1))
+                    continue
+                response.raise_for_status()
+                return response
+            except requests.RequestException:
+                if attempt == 3:
+                    raise
+                time.sleep(2 ** (attempt + 1))
 
 
 def parse_sitemap(data):

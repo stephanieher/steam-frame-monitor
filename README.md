@@ -11,11 +11,11 @@ A listing does **not** confirm stock, preorder availability, or Östersund Boka 
 ## Reliability and evidence
 
 - Source: https://www.elgiganten.se/sitemaps/OCSEELG.pdp.index.sitemap.xml (published in Elgiganten Sweden's robots.txt).
-- Retries transient HTTP errors, validates XML and Swedish product URLs, supports compressed and nested sitemaps, and limits concurrency to four requests.
+- Uses browser-compatible TLS/HTTP requests for the public sitemap (plain requests received HTTP 429), retries transient HTTP errors, validates XML and Swedish product URLs, supports compressed and nested sitemaps, and limits concurrency to four requests.
 - Empty, blocked, malformed or partially failed checks fail the workflow instead of claiming the item is absent. Any confirmed matches still trigger alerts during a partial check.
 - Workflow runs are serialized to prevent overlapping alerts and status commits.
 - Every run records its timestamp, sitemap count, product count, matches and errors in the Actions summary and a seven-day artifact.
-- `docs/status.json` is committed only on the first check or a meaningful result/health change. Its timestamp is the last saved result, not necessarily the latest run. The included HTML viewer is not automatically published as a website.
+- `docs/status.json` is committed on the first check, a meaningful result/health change, or once per UTC calendar month to keep repository activity current. Its timestamp is the last saved result, not necessarily the latest run. The included HTML viewer is not automatically published as a website.
 - Workflow permissions are limited to repository contents and issues. No personal access token or external service is required.
 - Standard GitHub-hosted runners are free for this public repository. GitHub may disable scheduled workflows after 60 days without repository activity; periodically check that the schedule remains enabled.
 
