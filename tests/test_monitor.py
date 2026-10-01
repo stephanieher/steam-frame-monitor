@@ -44,8 +44,9 @@ class MonitorTests(unittest.TestCase):
         self.assertFalse(status['complete'])
         self.assertTrue(status['error'])
 
+    @patch('monitor.inspect_product', return_value=True)
     @patch('monitor.inspect_sitemap')
-    def test_matches_preserved_on_partial_failure(self, inspect):
+    def test_matches_preserved_on_partial_failure(self, inspect, product):
         def response(url):
             if url == monitor.SITEMAP_INDEX:
                 return 'sitemapindex', [CHILD, CHILD + '?other']
@@ -63,6 +64,46 @@ class MonitorTests(unittest.TestCase):
         self.assertFalse(monitor.check()['complete'])
 
 
+
+class AvailabilityTests(unittest.TestCase):
+    def page(self, state="InStock", price="999", name="Valve Steam Frame", url=PRODUCT, offer_name="Standard Price"):
+        import json
+        product = {"@type": "Product", "url": url, "name": name,
+                   "offers": [{"name": offer_name, "price": price, "priceCurrency": "SEK",
+                               "availability": "https://schema.org/" + state}]}
+        return '<script type="application/ld+json">' + json.dumps(product) + '</script>'
+
+    def test_stock_and_preorder_can_alert(self):
+        for state in ["InStock", "LimitedAvailability", "PreOrder", "PreSale", "OnlineOnly"]:
+            self.assertTrue(monitor.product_availability(self.page(state), PRODUCT))
+
+    def test_unavailable_and_unpriced_do_not_alert(self):
+        for state in ["OutOfStock", "SoldOut", "Discontinued", "InStoreOnly"]:
+            self.assertFalse(monitor.product_availability(self.page(state), PRODUCT))
+        for price in ["0", "NaN", "Infinity", "", "invalid"]:
+            self.assertFalse(monitor.product_availability(self.page(price=price), PRODUCT))
+
+    def test_recommendations_business_and_missing_data_fail_closed(self):
+        for html in [self.page(name="Other headset"), self.page(url=PRODUCT + "other"),
+                     self.page(offer_name="Business Price"), '<html>Buy now</html>']:
+            with self.assertRaises(ValueError):
+                monitor.product_availability(html, PRODUCT)
+
+    @patch('monitor.inspect_product', return_value=False)
+    @patch('monitor.inspect_sitemap', return_value=('urlset', [PRODUCT]))
+    def test_listing_without_stock_does_not_alert(self, sitemap, product):
+        status = monitor.check()
+        self.assertFalse(status['found'])
+        self.assertEqual(status['listing_matches'], [PRODUCT])
+        self.assertEqual(status['matches'], [])
+
+    @patch('monitor.inspect_product', side_effect=RuntimeError('blocked'))
+    @patch('monitor.inspect_sitemap', return_value=('urlset', [PRODUCT]))
+    def test_blocked_product_is_unknown_and_does_not_alert(self, sitemap, product):
+        status = monitor.check()
+        self.assertFalse(status['complete'])
+        self.assertFalse(status['found'])
+
 class AlertTests(unittest.TestCase):
     def test_no_match_does_not_contact_github(self):
         session = Mock()
@@ -74,13 +115,15 @@ class AlertTests(unittest.TestCase):
         session = Mock()
         session.get.return_value.json.return_value = []
         session.post.return_value.json.return_value = {'html_url': 'https://github.com/example/1', 'assignees': [{'login': 'stephanieher'}]}
-        status = {'found': True, 'matches': [PRODUCT], 'checked_at': '2026-09-24'}
+        status = {'found': True, 'matches': [PRODUCT, PRODUCT + '-other-model'], 'checked_at': '2026-09-24'}
         notify(status, session, 'stephanieher/steam-frame-monitor', 'stephanieher')
         body = session.post.call_args.kwargs['json']
         self.assertEqual(body['assignees'], ['stephanieher'])
         self.assertIn(PRODUCT, body['body'])
+        self.assertEqual(session.post.call_count, 1)
         session.get.return_value.json.return_value = [{'state': 'closed', 'body': body['body']}]
         session.post.reset_mock()
+        status['matches'] = [PRODUCT + '-new-model']
         notify(status, session, 'stephanieher/steam-frame-monitor', 'stephanieher')
         session.post.assert_not_called()
 
