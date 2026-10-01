@@ -5,6 +5,8 @@ import gzip
 import json
 import re
 import sys
+from html.parser import HTMLParser
+from decimal import Decimal, InvalidOperation
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -77,6 +79,84 @@ def inspect_sitemap(url):
     return parse_sitemap(get(url).content)
 
 
+class ProductDataParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.capture = False
+        self.parts = []
+        self.documents = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script":
+            self.capture = dict(attrs).get("type", "").lower() == "application/ld+json"
+            self.parts = []
+
+    def handle_data(self, data):
+        if self.capture:
+            self.parts.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "script" and self.capture:
+            self.documents.append(json.loads("".join(self.parts)))
+            self.capture = False
+
+
+def product_availability(html, url):
+    """Only trust a priced consumer offer on the matching product itself."""
+    parser = ProductDataParser()
+    parser.feed(html)
+
+    def nodes(value):
+        if isinstance(value, list):
+            for item in value:
+                yield from nodes(item)
+        elif isinstance(value, dict):
+            yield value
+            for item in value.values():
+                yield from nodes(item)
+
+    known = False
+    for product in nodes(parser.documents):
+        types = product.get("@type", [])
+        if isinstance(types, str):
+            types = [types]
+        if "Product" not in types:
+            continue
+        if product.get("url", product.get("@id", "")).rstrip("/") != url.rstrip("/"):
+            continue
+        if not re.search(r"(?<![a-z])steam[-_\s]*frame(?![a-z])", product.get("name", "").lower()):
+            continue
+        offers = product.get("offers", [])
+        if isinstance(offers, dict):
+            offers = [offers]
+        for offer in offers:
+            customer = offer.get("eligibleCustomerType", {})
+            if "business" in offer.get("name", "").lower():
+                continue
+            customer_id = customer.get("@id", "") if isinstance(customer, dict) else customer
+            if customer_id and customer_id.rsplit("/", 1)[-1] != "Public":
+                continue
+            availability = offer.get("availability", "").rsplit("/", 1)[-1]
+            if availability not in {"InStock", "LimitedAvailability", "OnlineOnly", "PreOrder", "PreSale", "OutOfStock", "SoldOut", "Discontinued", "InStoreOnly"}:
+                continue
+            known = True
+            if availability in {"OutOfStock", "SoldOut", "Discontinued", "InStoreOnly"}:
+                continue
+            try:
+                price = Decimal(str(offer.get("price", "0")))
+            except InvalidOperation:
+                continue
+            if price.is_finite() and price > 0 and offer.get("priceCurrency") == "SEK":
+                return True
+    if not known:
+        raise ValueError("No confirmed consumer availability on the Steam Frame product page")
+    return False
+
+
+def inspect_product(url):
+    return product_availability(get(url).text, url)
+
+
 def check():
     pending = {SITEMAP_INDEX}
     visited, products, matches, errors = set(), set(), set(), []
@@ -110,12 +190,21 @@ def check():
                     errors.append(f"{url}: {type(exc).__name__}: {exc}")
     if not products and not errors:
         errors.append("No products checked; sitemap index may be cyclic or invalid")
+    listings = sorted(matches)
+    available = []
+    for url in listings:
+        try:
+            if inspect_product(url):
+                available.append(url)
+        except Exception as exc:
+            errors.append(f"{url}: {type(exc).__name__}: {exc}")
     return {
-        "found": bool(matches),
+        "found": bool(available),
+        "listing_matches": listings,
         "complete": not errors,
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "source": SITEMAP_INDEX,
-        "matches": sorted(matches),
+        "matches": available,
         "sitemaps_checked": successful,
         "sitemaps_attempted": len(visited),
         "products_checked": len(products),
