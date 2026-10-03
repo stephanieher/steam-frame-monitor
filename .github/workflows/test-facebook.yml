@@ -1,0 +1,54 @@
+name: Test public Elgiganten Facebook access
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install public browser runtime
+        run: |
+          python -m pip install playwright==1.63.0
+          python -m playwright install --with-deps chromium
+      - name: Read public Elgiganten posts
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+              browser = p.chromium.launch()
+              page = browser.new_page(locale='en-US', viewport={'width': 1280, 'height': 1600})
+              response = page.goto('https://www.facebook.com/Elgiganten', wait_until='domcontentloaded', timeout=60000)
+              print('Page HTTP status:', response.status if response else None)
+              try:
+                  page.get_by_role('button', name='Close', exact=True).click(timeout=15000)
+              except Exception:
+                  pass
+              try:
+                  page.locator('[data-ad-preview="message"]').first.wait_for(timeout=30000)
+                  page.get_by_role('heading', name='Elgiganten Sverige', exact=False).first.wait_for(timeout=10000)
+                  messages = page.locator('[data-ad-preview="message"]').all_inner_texts()
+                  Path('facebook-posts.json').write_text(json.dumps(messages, ensure_ascii=False, indent=2))
+                  print('Public post messages loaded:', len(messages))
+                  if not messages:
+                      raise RuntimeError('No public post messages')
+              finally:
+                  page.screenshot(path='facebook-access.png', full_page=True)
+                  Path('facebook-page.txt').write_text(page.locator('body').inner_text())
+                  browser.close()
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: facebook-access-evidence
+          path: |
+            facebook-access.png
+            facebook-posts.json
+            facebook-page.txt
+          retention-days: 2
