@@ -18,7 +18,7 @@
 <body>
   <main>
     <h1>Steam Frame Watch</h1>
-    <p class="muted">Watching Elgiganten Sweden.</p>
+    <p class="muted">Watching official Elgiganten Sweden announcements.</p>
     <div id="status" class="status">Checking latest result…</div>
     <div id="details" class="muted"></div>
     <button onclick="location.reload()">Refresh</button>
@@ -28,9 +28,9 @@
       .then(r => r.json())
       .then(d => {
         document.getElementById('status').textContent = d.found
-          ? '🚨 Steam Frame detected!'
+          ? '🟢 Steam Frame ordering announcement found'
           : !d.checked_at ? 'Not checked yet'
-          : d.complete ? '✅ Not listed in the product sitemap'
+          : d.complete ? 'No qualifying availability announcement found'
           : '⚠️ Check incomplete — availability unknown';
         const details = document.getElementById('details');
         details.textContent = 'Last saved result: ' + (d.checked_at ? new Date(d.checked_at).toLocaleString() : 'not run') + '. See GitHub Actions for every check.';
@@ -41,7 +41,7 @@
         }
         for (const url of d.matches || []) {
           const parsed = new URL(url);
-          if (parsed.protocol !== 'https:' || !['www.elgiganten.se', 'elgiganten.se'].includes(parsed.hostname)) continue;
+          if (parsed.protocol !== 'https:' || !['www.elgiganten.se', 'elgiganten.se', 'via.tt.se'].includes(parsed.hostname)) continue;
           const row = document.createElement('p');
           const link = document.createElement('a');
           link.href = url;
