@@ -1,42 +1,39 @@
-# Steam Frame → Elgiganten Sweden Monitor
+# Steam Frame → Elgiganten Sweden announcement watch
 
-**Current limitation:** Elgiganten blocks the hosted GitHub checker. Failure emails have been disabled in account notification settings, but an always-on availability email cannot be promised until hosted access is resolved.
+Watches Elgiganten Sweden's **official press-release RSS** on GitHub every 30 minutes. Runs while your Mac is off and needs no new account, login, or paid monitoring service.
 
-Checks Elgiganten Sweden's official product sitemap every 30 minutes, at minute 17 and 47 of each hour (UTC). GitHub schedules can be delayed or dropped during heavy load; this is not a guaranteed exact-time service. Manual runs are available under **Actions → Check Elgiganten for Steam Frame → Run workflow**.
+## What triggers the email
 
-## Alerts
+A recent RSS headline or summary must explicitly say Steam Frame can be bought or preordered at Elgiganten now. The email uses a large green indicator and clear **AVAILABLE TO BUY** or **PREORDERS ARE OPEN** wording with the official announcement link. General mentions, negative or future statements, and releases older than seven days or published before 3 October 2026 do not alert.
 
-A matching Swedish Steam Frame product page must report a priced consumer offer in SEK as in stock, available online, or open for preorder before an alert is created. A single GitHub issue assigned to **stephanieher** requests an email to the account’s configured notification address. Closing it or finding another model does not send repeated alerts. No issue is created for an absent listing, an out-of-stock product, or an unknown availability result.
+The checker creates one issue assigned to `stephanieher`, which requests an email through the existing GitHub notification settings. It checks both open and closed issues and sends no repeat availability alert, even if another model appears. Actual inbox delivery depends on GitHub and mail filtering; no fake availability email is sent for testing.
 
-To avoid routine failure emails, turn off Email under GitHub notification settings → System → Actions. Keep Email enabled under Participating, @mentions and custom for availability alerts. Failures remain visible in GitHub Actions.
+GitHub Actions email notifications were disabled to stop routine failure emails. Keep **Participating, @mentions and custom → Email** enabled for the availability alert. Other repositories' notifications are separate.
 
-An alert reflects the consumer availability published in Elgiganten’s product data, including preorders; verify delivery when ordering. Östersund Boka & Hämta availability is not checked. Product URLs without the Steam Frame name, and pages not yet included in the sitemap, cannot be detected by this monitor.
+## Scope and limitations
 
-## Reliability and evidence
+This watches public press announcements, **not live stock or all Facebook posts**. Conservative wording rules can miss an announcement, and information published only in a full article, on Facebook, or on a product page may not appear in the RSS headline/summary. Check the linked shop page for current price, delivery, and Östersund pickup before ordering.
 
-- Source: https://www.elgiganten.se/sitemaps/OCSEELG.pdp.index.sitemap.xml (published in Elgiganten Sweden's robots.txt).
-- Uses browser-compatible TLS/HTTP requests for the public sitemap (plain requests received HTTP 429), retries transient HTTP errors, validates XML and Swedish product URLs, supports compressed and nested sitemaps, and limits concurrency to four requests.
-- Empty, blocked, malformed or partially failed checks, including unknown product availability, fail the workflow instead of claiming the item is absent. Confirmed purchasable products can still trigger an alert during a partial check.
-- Hosted access is currently blocked: both Ubuntu and macOS GitHub runners received HTTP 429. A successful local check does not establish a working hosted monitor. The cloud availability alert remains unverified until a hosted checker can reach Elgiganten.
-- Workflow runs are serialized to prevent overlapping alerts and status commits.
-- Every run records its timestamp, sitemap count, product count, matches and errors in the Actions summary and a seven-day artifact.
-- `docs/status.json` is committed on the first check, a meaningful result/health change, or once per UTC calendar month to keep repository activity current. Its timestamp is the last saved result, not necessarily the latest run. The included HTML viewer is not automatically published as a website.
-- Workflow permissions are limited to repository contents and issues. No personal access token or external service is required.
-- Standard GitHub-hosted runners are free for this public repository. GitHub may disable scheduled workflows after 60 days without repository activity; periodically check that the schedule remains enabled.
+The old product-page checker remains in `monitor.py` for reference but is no longer scheduled: Elgiganten blocked both Ubuntu and macOS GitHub runners. A manual Facebook access experiment also returned a login page from the cloud. Neither source is used by the active watch.
 
-## Local development
+## Operation
+
+- Source: [Elgiganten's official RSS](https://via.tt.se/rss/releases/latest?publisherId=3236639), linked by [its Via TT pressroom](https://via.tt.se/pressrum/3236639/elgiganten) and connected from [Elgiganten's own pressroom](https://www.elgiganten.se/om-elgiganten/pressrum).
+- Schedule: minute 17 and 47 each hour. GitHub schedules may be delayed or dropped.
+- Manual check: **Actions → Check Elgiganten for Steam Frame → Run workflow**.
+- Every run validates the publisher, release links and dates. Blocked, empty or malformed feeds fail visibly in Actions instead of reporting a successful absence.
+- The run summary and seven-day artifact contain the result. `docs/status.json` is saved for meaningful health/result changes and monthly; its timestamp is the last saved result, not every check.
+- Serialized runs and deduplication prevent repeated alerts. Permissions are limited to repository contents and issues, using GitHub's built-in token.
+- GitHub can disable public repository schedules after 60 days without activity. Monthly status commits help keep this repository active.
+
+## Development
 
 Use Python 3.12:
 
 ```sh
 python -m pip install -r requirements.txt
 python -m unittest discover -s tests -v
-python monitor.py
+python announcement_monitor.py
 ```
 
-`notify.py` is invoked by the workflow with `GH_TOKEN`, `GITHUB_REPOSITORY` and `ALERT_ASSIGNEE`. Tests use mocked GitHub responses and never create test issues.
-
-## References
-
-- https://www.elgiganten.se/robots.txt
-- https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
+Tests cover current/preorder claims, negation, unrelated products, dates, invalid sources, access failures, email wording and duplicate suppression without sending test issues.
