@@ -31,10 +31,20 @@ def notify(status, session, repository, assignee):
         if any(marker in (issue.get("body") or "") for issue in issues):
             print(f"Already alerted: {url}")
             continue
+        title = "Steam Frame is available to order at Elgiganten Sweden"
+        message = "Elgiganten Sweden reports a priced Steam Frame offer as in stock or open for ordering/preorder."
+        if status.get("mode") == "official-announcements":
+            preorder = status["announcements"][url]["kind"] == "preorder"
+            label = "PREORDERS ARE OPEN" if preorder else "AVAILABLE TO BUY"
+            title = f"Steam Frame — {label} at Elgiganten Sweden"
+            message = (f"# 🟢 STEAM FRAME\n## {label}\n\n"
+                       "Elgiganten Sweden has published an official availability announcement.\n\n"
+                       f"### [Read Elgiganten's announcement]({url})\n\n"
+                       "Follow its shop link to check the current price and delivery date.")
         response = session.post(base, json={
-            "title": "Steam Frame is available to order at Elgiganten Sweden",
+            "title": title,
             "assignees": [assignee],
-            "body": f"{availability_marker}\n{marker}\nElgiganten Sweden reports a priced Steam Frame offer as in stock or open for ordering/preorder.\n\n{url}\n\nChecked: {status['checked_at']}\n\nOpen the product link to order and confirm delivery details. Östersund pickup has not been confirmed; check Boka & Hämta before travelling.",
+            "body": f"{availability_marker}\n{marker}\n{message}\n\n{url}\n\nChecked: {status['checked_at']}\n\nÖstersund pickup has not been confirmed; check Boka & Hämta before travelling.",
         }, timeout=30)
         response.raise_for_status()
         issue = response.json()
