@@ -1,14 +1,12 @@
 {
+  "checked_at": "2026-10-03T15:04:40.668819+00:00",
+  "source": "https://via.tt.se/rss/releases/latest?publisherId=3236639",
+  "mode": "official-announcements",
+  "complete": true,
   "found": false,
-  "complete": false,
-  "checked_at": "2026-10-01T00:34:59.942603+00:00",
-  "source": "https://www.elgiganten.se/sitemaps/OCSEELG.pdp.index.sitemap.xml",
   "matches": [],
-  "sitemaps_checked": 0,
-  "sitemaps_attempted": 1,
-  "products_checked": 0,
-  "partial_errors": [
-    "https://www.elgiganten.se/sitemaps/OCSEELG.pdp.index.sitemap.xml: HTTPError: HTTP Error 429: "
-  ],
-  "error": "Incomplete check: 1 sitemap error(s)"
+  "announcements": {},
+  "announcement_count": 25,
+  "error": null,
+  "partial_errors": []
 }
