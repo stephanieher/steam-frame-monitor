@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Check out repository
@@ -33,10 +33,10 @@ jobs:
       - name: Test monitoring and alert logic
         run: python -m unittest discover -s tests -v
 
-      - name: Check Elgiganten product sitemap
+      - name: Check official Elgiganten announcements
         id: monitor
         continue-on-error: true
-        run: python monitor.py
+        run: python announcement_monitor.py
 
       - name: Alert by GitHub issue
         if: always() && (steps.monitor.outcome == 'success' || steps.monitor.outcome == 'failure')
